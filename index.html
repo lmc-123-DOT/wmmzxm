@@ -1,0 +1,1303 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>琳琳的追星相册 · 汪苏泷</title>
+<style>
+/* ============================================================
+   相册 · 展台版
+   顶部全宽视频展台 + 按日期分组的密贴照片墙 + 背景音乐
+   ============================================================ */
+:root{
+  --bg:#0d0d0c;
+  --fg:#f4f3f0;
+  --dim:#8c8a82;
+  --line:rgba(255,255,255,.1);
+  --accent:#5eead4;
+  --gap:5px;
+}
+*,*::before,*::after{ box-sizing:border-box; }
+html{ scroll-behavior:smooth; }
+body{
+  margin:0; background:var(--bg); color:var(--fg);
+  font-family:-apple-system,"PingFang SC","Microsoft YaHei","Noto Sans SC",system-ui,sans-serif;
+  font-size:14px; line-height:1.6;
+  -webkit-font-smoothing:antialiased;
+}
+img{ display:block; max-width:100%; }
+button{ font:inherit; color:inherit; background:none; border:0; cursor:pointer; }
+h1,h2,p,figure{ margin:0; }
+::selection{ background:var(--fg); color:var(--bg); }
+
+/* ============ 顶部展台（横向轮播） ============ */
+.hero{
+  position:relative;
+  width:100%;
+  height:clamp(380px,68vh,760px);
+  overflow:hidden;
+  background:#151514;
+}
+
+/* 横向滚动的轨道 */
+.hero__track{
+  display:flex;
+  height:100%;
+  overflow-x:auto;
+  overflow-y:hidden;
+  scroll-snap-type:x mandatory;
+  scroll-behavior:smooth;
+  scrollbar-width:none;
+  -ms-overflow-style:none;
+  cursor:grab;
+}
+.hero__track::-webkit-scrollbar{ display:none; }
+.hero__track.dragging{ cursor:grabbing; scroll-snap-type:none; }
+
+.hero__slide{
+  position:relative;
+  flex:0 0 100%;
+  height:100%;
+  overflow:hidden;
+  scroll-snap-align:start;
+  scroll-snap-stop:always;
+}
+.hero__slide img.poster,
+.hero__slide video{
+  position:absolute; inset:0;
+  width:100%; height:100%;
+  object-fit:cover;
+  display:block;
+}
+.hero__slide video{
+  opacity:0;
+  transition:opacity .6s ease;
+}
+.hero__slide video.on{ opacity:1; }
+
+/* 每个 slide 自己的压暗层 */
+.hero__slide::after{
+  content:"";
+  position:absolute; inset:0;
+  background:
+    linear-gradient(to top, var(--bg) 0%, rgba(13,13,12,.72) 22%, rgba(13,13,12,.12) 52%, rgba(13,13,12,.5) 100%);
+  pointer-events:none;
+}
+
+/* 文字层 */
+.hero__cap{
+  position:absolute; left:0; right:0; bottom:0;
+  z-index:2;
+  padding:0 clamp(18px,4vw,56px) clamp(58px,7vw,84px);
+  pointer-events:none;
+}
+.hero__kicker{
+  display:flex; align-items:center; gap:10px;
+  font-size:11px; letter-spacing:.2em; color:rgba(255,255,255,.62);
+  margin-bottom:14px;
+  font-variant-numeric:tabular-nums;
+}
+.hero__kicker i{
+  width:5px; height:5px; border-radius:50%; background:var(--accent);
+  box-shadow:0 0 10px var(--accent);
+  animation:blink 2.6s ease-in-out infinite;
+}
+@keyframes blink{ 0%,100%{ opacity:1 } 50%{ opacity:.3 } }
+
+.hero__cap h1{
+  font-size:clamp(26px,4.6vw,58px);
+  font-weight:700; letter-spacing:-.03em; line-height:1.1;
+  max-width:14em;
+  text-wrap:balance;
+  text-shadow:0 2px 30px rgba(0,0,0,.5);
+}
+.hero__cap p{
+  margin-top:12px;
+  font-size:clamp(12px,1.15vw,14px);
+  color:rgba(255,255,255,.66);
+  letter-spacing:.04em;
+}
+
+/* 播放按钮（只对当前 slide 有效） */
+.hero__play{
+  position:absolute; z-index:4;
+  right:clamp(18px,4vw,56px); bottom:clamp(58px,7vw,84px);
+  display:flex; align-items:center; gap:12px;
+  padding:11px 20px 11px 15px;
+  border-radius:999px;
+  border:1px solid rgba(255,255,255,.3);
+  background:rgba(12,12,11,.32);
+  backdrop-filter:blur(10px);
+  -webkit-backdrop-filter:blur(10px);
+  color:#fff; font-size:13px; letter-spacing:.04em;
+  transition:background .25s, border-color .25s, transform .3s;
+}
+.hero__play:hover{
+  background:rgba(12,12,11,.58);
+  border-color:rgba(255,255,255,.7);
+  transform:translateY(-1px);
+}
+.hero__play svg{ width:15px; height:15px; }
+.hero__play .i-pause{ display:none; }
+.hero__play.playing .i-play{ display:none; }
+.hero__play.playing .i-pause{ display:block; }
+
+/* 没有视频时的提示 */
+.hero__hint{
+  position:absolute; z-index:6;
+  right:clamp(18px,4vw,56px); bottom:calc(clamp(58px,7vw,84px) + 56px);
+  max-width:300px;
+  padding:12px 15px;
+  border-radius:10px;
+  background:rgba(18,17,15,.94);
+  border:1px solid rgba(255,255,255,.14);
+  font-size:12px; line-height:1.7; color:rgba(255,255,255,.88);
+  opacity:0; transform:translateY(6px); pointer-events:none;
+  transition:opacity .3s, transform .3s;
+}
+.hero__hint.show{ opacity:1; transform:none; }
+.hero__hint code{
+  font-family:Consolas,monospace; font-size:11.5px;
+  background:rgba(255,255,255,.12); padding:1px 5px; border-radius:3px;
+}
+
+/* 左右箭头 */
+.hero__arrow{
+  position:absolute; top:50%; transform:translateY(-50%);
+  z-index:5;
+  width:46px; height:46px;
+  display:grid; place-items:center;
+  border-radius:50%;
+  border:1px solid rgba(255,255,255,.22);
+  background:rgba(12,12,11,.34);
+  backdrop-filter:blur(8px);
+  -webkit-backdrop-filter:blur(8px);
+  color:#fff;
+  transition:background .25s, border-color .25s, opacity .25s, transform .25s;
+}
+.hero__arrow:hover{ background:rgba(12,12,11,.62); border-color:rgba(255,255,255,.6); }
+.hero__arrow svg{ width:16px; height:16px; }
+.hero__arrow.prev{ left:clamp(10px,2vw,26px); }
+.hero__arrow.next{ right:clamp(10px,2vw,26px); }
+.hero__arrow[disabled]{ opacity:.34; pointer-events:none; }
+
+/* 底部：指示条 + 计数 */
+.hero__nav{
+  position:absolute; z-index:5;
+  left:clamp(18px,4vw,56px); right:clamp(18px,4vw,56px);
+  bottom:clamp(18px,2.6vw,28px);
+  display:flex; align-items:center; gap:14px;
+  pointer-events:none;
+}
+.hero__bars{
+  display:flex; align-items:center; gap:6px;
+  pointer-events:auto;
+}
+.hero__bar{
+  width:26px; height:3px; border-radius:2px;
+  background:rgba(255,255,255,.26);
+  cursor:pointer;
+  transition:background .25s, width .3s;
+  border:0; padding:0;
+}
+.hero__bar:hover{ background:rgba(255,255,255,.55); }
+.hero__bar.on{ background:#fff; width:44px; }
+
+.hero__counter{
+  margin-left:auto;
+  font-size:11.5px; letter-spacing:.14em;
+  color:rgba(255,255,255,.55);
+  font-variant-numeric:tabular-nums;
+}
+.hero__counter b{ color:#fff; font-weight:500; }
+
+/* 展台上的故事 */
+.hero__cap .hero__sub{
+  margin-top:12px;
+  font-size:clamp(12px,1.15vw,14px);
+  color:rgba(255,255,255,.66);
+  letter-spacing:.04em;
+}
+.hero__cap .hero__story{
+  margin-top:10px;
+  max-width:34em;
+  font-size:clamp(11.5px,1.05vw,13px);
+  line-height:1.8;
+  color:rgba(255,255,255,.64);
+  text-shadow:0 1px 14px rgba(0,0,0,.6);
+}
+
+/* ============ 序言 ============ */
+.intro{
+  padding:clamp(36px,5.5vw,72px) clamp(0px,1.2vw,10px) clamp(20px,3vw,38px);
+}
+.intro__inner{
+  max-width:46em;
+}
+.intro__kicker{
+  display:flex; align-items:center; gap:9px;
+  font-size:10.5px; letter-spacing:.22em; color:var(--accent);
+  margin-bottom:clamp(14px,2vw,22px);
+}
+.intro__kicker::before{
+  content:""; width:18px; height:1px; background:var(--accent); opacity:.55;
+}
+.intro__text{
+  font-size:clamp(14.5px,1.45vw,17.5px);
+  line-height:2;
+  color:rgba(255,255,255,.7);
+  letter-spacing:.01em;
+}
+.intro__sign{
+  display:block;
+  margin-top:clamp(16px,2.4vw,26px);
+  font-size:11px; letter-spacing:.1em; color:var(--dim);
+}
+
+/* ============ 照片墙 ============ */
+.mosaic{
+  padding:0;
+}
+
+/* 左：照片网格    右：故事窗口 */
+.layout{
+  display:grid;
+  grid-template-columns:minmax(0,1fr) clamp(260px, 22vw, 320px);
+  gap:clamp(22px, 3vw, 44px);
+  padding:0 clamp(0px, 1.2vw, 10px);
+  align-items:start;
+}
+
+/* 没有故事时，照片占满整宽 */
+.layout.no-rail{ grid-template-columns:minmax(0,1fr); }
+
+/* 右侧故事窗口：滚动时钉住 */
+.stories{
+  position:sticky;
+  top:20px;
+  max-height:calc(100vh - 40px);
+  overflow-y:auto;
+  overscroll-behavior:contain;
+  padding-right:4px;
+  scrollbar-width:thin;
+  scrollbar-color:rgba(255,255,255,.16) transparent;
+}
+.stories::-webkit-scrollbar{ width:4px; }
+.stories::-webkit-scrollbar-thumb{ background:rgba(255,255,255,.16); border-radius:2px; }
+.stories::-webkit-scrollbar-track{ background:transparent; }
+
+.stories__head{
+  display:flex; align-items:baseline; justify-content:space-between;
+  gap:10px;
+  padding-bottom:11px;
+  border-bottom:1px solid var(--line);
+  margin-bottom:18px;
+}
+.stories__title{
+  font-size:12.5px; font-weight:600; letter-spacing:.06em;
+  display:flex; align-items:center; gap:7px;
+}
+.stories__title i{
+  width:5px; height:5px; border-radius:50%;
+  background:var(--accent);
+}
+.stories__count{
+  font-size:10px; color:var(--dim); letter-spacing:.12em;
+}
+
+/* 时间线：左侧一条竖线，故事挂在上面 */
+.story{
+  position:relative;
+  padding:0 0 22px 16px;
+  margin-bottom:0;
+  border-left:1px solid rgba(255,255,255,.1);
+  margin-left:3px;
+  cursor:pointer;
+  transition:border-color .25s;
+}
+.story:last-child{ padding-bottom:4px; }
+.story::before{
+  content:"";
+  position:absolute; left:-4px; top:3px;
+  width:7px; height:7px; border-radius:50%;
+  background:#0d0d0c;
+  border:1px solid rgba(255,255,255,.32);
+  transition:background .25s, border-color .25s, box-shadow .25s;
+}
+.story:hover{ border-left-color:rgba(94,234,212,.5); }
+.story:hover::before{
+  background:var(--accent);
+  border-color:var(--accent);
+  box-shadow:0 0 0 4px rgba(94,234,212,.14);
+}
+
+.story__date{
+  font-size:10px; letter-spacing:.14em; color:var(--dim);
+  font-variant-numeric:tabular-nums;
+}
+.story__title{
+  font-size:13.5px; font-weight:600;
+  margin-top:5px; line-height:1.5;
+  transition:color .25s;
+}
+.story:hover .story__title{ color:var(--accent); }
+.story__text{
+  font-size:12px; line-height:1.85;
+  color:rgba(255,255,255,.55);
+  margin-top:6px;
+}
+
+/* 故事窗口在窄屏时沉到照片下面 */
+@media (max-width: 1080px){
+  .layout{ grid-template-columns:1fr; }
+  .stories{
+    position:static;
+    max-height:none;
+    overflow:visible;
+    margin-top:clamp(24px,4vw,40px);
+    padding-top:clamp(20px,3vw,30px);
+    border-top:1px solid var(--line);
+  }
+}
+
+/* 分组 */
+.group{
+  display:block;
+  padding-top:clamp(30px,4.5vw,52px);
+}
+.group:first-child{ padding-top:clamp(16px,2.4vw,28px); }
+
+.group__head{
+  display:flex; align-items:baseline; gap:14px;
+  padding:0 clamp(10px,1.6vw,18px) 12px;
+  border-top:1px solid var(--line);
+  padding-top:clamp(16px,2.2vw,24px);
+}
+.group:first-child .group__head{ border-top:0; padding-top:0; }
+.group__title{
+  font-size:clamp(20px,2.2vw,28px);
+  font-weight:600; letter-spacing:-.01em;
+}
+.group__range{
+  font-size:11px; color:var(--dim);
+  letter-spacing:.1em; font-variant-numeric:tabular-nums;
+}
+.group__count{
+  margin-left:auto;
+  font-size:11px; color:var(--dim);
+  letter-spacing:.1em; font-variant-numeric:tabular-nums;
+}
+
+/* 组内网格：12 列基准，每张默认跨 2 列（=6 张一行） */
+.group__grid{
+  columns:var(--cols, 4);
+  column-gap:var(--gap);
+}
+
+/* 单张 */
+.tile{
+  break-inside:avoid;
+  margin:0 0 var(--gap);
+  position:relative;
+  overflow:hidden;
+  background:#191918;
+  cursor:zoom-in;
+  -webkit-tap-highlight-color:transparent;
+}
+
+.tile > img{
+  width:100%; height:auto;
+  display:block;
+  display:block;
+  transition:transform 1s cubic-bezier(.16,1,.3,1), filter .45s;
+  transform:scale(1.001);
+}
+.tile:hover > img{ transform:scale(1.06); filter:brightness(1.08) saturate(1.06); }
+.tile:focus-visible{ outline:2px solid #fff; outline-offset:-2px; }
+
+.tile__cap{
+  position:absolute; inset:auto 0 0 0;
+  padding:44px 10px 9px;
+  background:linear-gradient(to top, rgba(0,0,0,.8), rgba(0,0,0,.24) 55%, transparent);
+  opacity:0; transform:translateY(6px);
+  transition:opacity .3s, transform .3s;
+  pointer-events:none;
+}
+.tile:hover .tile__cap,
+.tile:focus-visible .tile__cap{ opacity:1; transform:none; }
+.tile__cap b{ display:block; font-size:12.5px; font-weight:500; }
+.tile__cap span{ display:block; font-size:10.5px; color:rgba(255,255,255,.62); margin-top:2px; letter-spacing:.06em; }
+
+/* 视频角标 */
+.tile__tag{
+  position:absolute; right:8px; top:8px; z-index:2;
+  display:flex; align-items:center; gap:4px;
+  padding:3px 7px; border-radius:4px;
+  background:rgba(10,10,9,.66); backdrop-filter:blur(4px);
+  font-size:10px; letter-spacing:.06em; color:#fff;
+}
+.tile__tag svg{ width:9px; height:9px; }
+
+/* 组里最后一张只剩自己时，占满整行收尾 */
+
+/* 有故事的照片：左下角一个呼吸的小点 */
+.tile__dot{
+  position:absolute; left:9px; bottom:9px; z-index:2;
+  width:7px; height:7px; border-radius:50%;
+  background:var(--accent);
+  animation:dotPulse 2.8s ease-out infinite;
+}
+@keyframes dotPulse{
+  0%{ box-shadow:0 0 0 0 rgba(94,234,212,.55) }
+  70%{ box-shadow:0 0 0 8px rgba(94,234,212,0) }
+  100%{ box-shadow:0 0 0 0 rgba(94,234,212,0) }
+}
+
+/* ============ 故事卡（组内通栏，左图右文） ============ */
+.story-card{
+  display:grid;
+  grid-template-columns:1.05fr .95fr;
+  height:clamp(230px, 26vw, 330px);
+  background:#141413;
+  border:1px solid rgba(255,255,255,.07);
+  overflow:hidden;
+  cursor:zoom-in;
+  margin-bottom:var(--gap);
+  -webkit-tap-highlight-color:transparent;
+}
+.story-card:focus-visible{ outline:2px solid #fff; outline-offset:2px; }
+.story-card__img{ overflow:hidden; }
+.story-card__img img{
+  width:100%; height:100%; object-fit:cover; display:block;
+  transition:transform 1s cubic-bezier(.16,1,.3,1);
+}
+.story-card:hover .story-card__img img{ transform:scale(1.04); }
+
+.story-card__text{
+  padding:clamp(18px,2.6vw,36px);
+  display:flex; flex-direction:column; justify-content:center;
+  gap:clamp(8px,1.2vw,14px);
+  min-width:0;
+}
+.story-card__kicker{
+  display:flex; align-items:center; gap:8px;
+  font-size:10px; letter-spacing:.22em; color:var(--accent);
+}
+.story-card__kicker::before{
+  content:""; width:14px; height:1px; background:var(--accent); opacity:.55;
+}
+.story-card__text h3{
+  font-size:clamp(16px,1.7vw,21px);
+  font-weight:600; letter-spacing:-.01em; line-height:1.35;
+}
+.story-card__text p{
+  font-size:clamp(12.5px,1.1vw,14px);
+  line-height:1.9;
+  color:rgba(255,255,255,.7);
+  max-width:32em;
+}
+.story-card__meta{
+  margin-top:auto;
+  font-size:10.5px; color:var(--dim); letter-spacing:.08em;
+}
+
+/* ============ 页脚 ============ */
+.foot{
+  display:flex; align-items:center; justify-content:space-between;
+  gap:16px; flex-wrap:wrap;
+  margin-top:clamp(20px,3vw,36px);
+  padding:20px clamp(14px,2.5vw,34px) 34px;
+  border-top:1px solid var(--line);
+  font-size:11.5px; color:var(--dim); letter-spacing:.06em;
+}
+
+/* ============ 背景音乐 ============ */
+.bgm{
+  position:fixed; right:clamp(14px,2vw,28px); bottom:clamp(14px,2vw,28px);
+  z-index:60;
+  display:flex; align-items:center; gap:0;
+  transition:gap .3s;
+}
+.bgm:hover{ gap:10px; }
+.bgm__btn{
+  position:relative;
+  width:46px; height:46px; flex:none;
+  display:grid; place-items:center;
+  border-radius:50%;
+  background:rgba(18,17,15,.86);
+  border:1px solid rgba(255,255,255,.18);
+  backdrop-filter:blur(10px);
+  -webkit-backdrop-filter:blur(10px);
+  color:#fff;
+  transition:border-color .25s, background .25s, transform .3s;
+}
+.bgm__btn:hover{ border-color:rgba(255,255,255,.5); transform:scale(1.06); }
+.bgm__btn svg{ width:16px; height:16px; }
+.bgm__btn .i-stop{ display:none; }
+.bgm.playing .bgm__btn .i-note{ display:none; }
+.bgm.playing .bgm__btn .i-stop{ display:block; }
+.bgm.playing .bgm__btn{ border-color:var(--accent); box-shadow:0 0 0 0 rgba(94,234,212,.5); animation:ring 2.4s ease-out infinite; }
+@keyframes ring{
+  0%{ box-shadow:0 0 0 0 rgba(94,234,212,.42) }
+  70%{ box-shadow:0 0 0 12px rgba(94,234,212,0) }
+  100%{ box-shadow:0 0 0 0 rgba(94,234,212,0) }
+}
+
+/* 播放时的跳动小条 */
+.bgm__bars{
+  display:none; align-items:flex-end; gap:2px; height:13px;
+}
+.bgm.playing .bgm__bars{ display:flex; }
+.bgm__bars i{ width:2px; background:var(--accent); border-radius:1px; animation:bar .9s ease-in-out infinite; }
+.bgm__bars i:nth-child(1){ height:5px; animation-delay:0s; }
+.bgm__bars i:nth-child(2){ height:11px; animation-delay:.14s; }
+.bgm__bars i:nth-child(3){ height:7px; animation-delay:.28s; }
+.bgm__bars i:nth-child(4){ height:13px; animation-delay:.42s; }
+@keyframes bar{ 0%,100%{ transform:scaleY(.4) } 50%{ transform:scaleY(1) } }
+
+.bgm__label{
+  overflow:hidden; white-space:nowrap;
+  max-width:0; opacity:0;
+  font-size:11.5px; color:var(--dim); letter-spacing:.06em;
+  transition:max-width .3s, opacity .3s;
+}
+.bgm:hover .bgm__label{ max-width:140px; opacity:1; }
+
+
+/* 歌单面板 */
+.bgm__panel{
+  position:absolute; right:0; bottom:52px;
+  width:236px;
+  padding:8px;
+  border-radius:14px;
+  background:rgba(18,17,15,.97);
+  border:1px solid rgba(255,255,255,.14);
+  backdrop-filter:blur(14px);
+  -webkit-backdrop-filter:blur(14px);
+  box-shadow:0 18px 40px -18px rgba(0,0,0,.9);
+  opacity:0; transform:translateY(8px); pointer-events:none;
+  transition:opacity .22s, transform .22s;
+}
+.bgm.open .bgm__panel{ opacity:1; transform:none; pointer-events:auto; }
+/* 面板下方盖一块透明区域，鼠标穿过按钮与面板之间的空隙时不会触发离开 */
+.bgm__panel::after{
+  content:";
+  position:absolute;
+  left:6px; right:6px; bottom:-28px;
+  height:28px;
+}
+.bgm__head{
+  font-size:10px; letter-spacing:.16em; color:var(--dim);
+  padding:4px 8px 8px;
+  display:flex; justify-content:space-between;
+}
+.bgm__list{ list-style:none; margin:0; padding:0; max-height:min(46vh, 340px); overflow-y:auto; }
+.bgm__item{
+  display:flex; align-items:center; gap:8px;
+  padding:8px; border-radius:9px;
+  font-size:12.5px; color:rgba(255,255,255,.82);
+  cursor:pointer;
+  transition:background .18s, color .18s;
+}
+.bgm__item:hover{ background:rgba(255,255,255,.08); }
+.bgm__item.on{ background:rgba(94,234,212,.13); color:var(--accent); }
+.bgm__item .num{ font-size:9.5px; color:var(--dim); width:15px; flex:none; font-variant-numeric:tabular-nums; }
+.bgm__item .t{ flex:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.bgm__item .a{ font-size:9.5px; color:var(--dim); flex:none; }
+
+/* ============ 灯箱 ============ */
+.lb{
+  position:fixed; inset:0; z-index:100;
+  display:flex; flex-direction:column;
+  background:#090909;
+  opacity:0; pointer-events:none;
+  transition:opacity .28s ease;
+}
+.lb.open{ opacity:1; pointer-events:auto; }
+html.shot .lb{ transition:none; }
+html.shot .lb__img{ transition:none; opacity:1; }
+
+.lb__bar{
+  display:flex; align-items:center; justify-content:space-between;
+  padding:14px clamp(14px,3vw,32px);
+  font-size:11.5px; color:rgba(255,255,255,.6); letter-spacing:.08em;
+  font-variant-numeric:tabular-nums; flex:none;
+}
+.lb__close{
+  width:36px; height:36px; display:grid; place-items:center;
+  border-radius:50%; border:1px solid rgba(255,255,255,.2); color:#fff;
+  transition:background .2s, transform .3s;
+}
+.lb__close:hover{ background:rgba(255,255,255,.12); transform:rotate(90deg); }
+.lb__close svg{ width:13px; height:13px; }
+
+.lb__stage{ position:relative; flex:1; min-height:0; display:flex; align-items:center; justify-content:center; padding:0 clamp(12px,5vw,80px); }
+.lb__img{ max-width:100%; max-height:100%; object-fit:contain; opacity:0; transition:opacity .3s; }
+.lb__img.shown{ opacity:1; }
+.lb__video{ display:none; position:relative; width:min(100%,860px); aspect-ratio:16/9; background:#151514; align-items:center; justify-content:center; }
+.lb__video.on{ display:flex; }
+.lb__video img{ position:absolute; inset:0; width:100%; height:100%; object-fit:cover; opacity:.4; }
+.lb__video-inner{ position:relative; text-align:center; color:#fff; padding:16px; }
+.lb__video-inner svg{ width:52px; height:52px; opacity:.9; }
+.lb__video-inner p{ font-size:12px; opacity:.65; margin-top:10px; }
+.lb__video-inner code{ background:rgba(255,255,255,.12); padding:1px 5px; border-radius:3px; font-size:11px; }
+
+.lb__nav{
+  position:absolute; top:50%; transform:translateY(-50%);
+  width:46px; height:46px; display:grid; place-items:center;
+  border-radius:50%; border:1px solid rgba(255,255,255,.16); color:#fff;
+  background:rgba(0,0,0,.25); transition:background .2s;
+}
+.lb__nav:hover{ background:rgba(255,255,255,.14); }
+.lb__nav svg{ width:15px; height:15px; }
+.lb__prev{ left:clamp(6px,1.5vw,24px); }
+.lb__next{ right:clamp(6px,1.5vw,24px); }
+
+.lb__foot{
+  display:flex; align-items:flex-start; justify-content:space-between;
+  gap:16px; padding:14px clamp(14px,3vw,32px) clamp(18px,3vw,28px);
+  border-top:1px solid rgba(255,255,255,.08); flex:none;
+}
+.lb__info{ min-width:0; flex:1; }
+.lb__title{ font-size:15px; font-weight:500; color:#fff; }
+.lb__story{
+  display:none;
+  margin-top:9px;
+  font-size:13px; line-height:1.9;
+  color:rgba(255,255,255,.66);
+  max-width:52em;
+}
+.lb__story.on{ display:block; }
+.lb__meta{ font-size:11px; color:rgba(255,255,255,.45); text-align:right; line-height:1.9; letter-spacing:.06em; }
+
+/* ============ 响应式 ============ */
+@media (max-width: 1200px){ :root{ --tile-h:186px; } }
+@media (max-width: 900px){ :root{ --tile-h:164px; } }
+@media (max-width: 640px){
+  :root{ --tile-h:132px; --gap:4px; }
+  .hero{ height:clamp(300px,56vh,460px); }
+  .hero__play span{ display:none; }
+  .hero__play{ padding:13px; border-radius:50%; }
+  .group__grid{ grid-template-columns:repeat(2, minmax(0,1fr)) !important; }
+
+  .bgm__btn{ width:42px; height:42px; }
+  .lb__nav{ width:38px; height:38px; }
+}
+@media (prefers-reduced-motion: reduce){
+  *{ transition-duration:.001ms !important; animation-duration:.001ms !important; }
+}
+</style>
+</head>
+<body>
+
+<!-- ============ 顶部展台（横向轮播） ============ -->
+<header class="hero">
+  <div class="hero__track" id="heroTrack"></div>
+
+  <button class="hero__arrow prev" id="heroPrev" aria-label="上一个">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M15 4l-8 8 8 8"/></svg>
+  </button>
+  <button class="hero__arrow next" id="heroNext" aria-label="下一个">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4l8 8-8 8"/></svg>
+  </button>
+
+  <div class="hero__nav">
+    <div class="hero__bars" id="heroBars"></div>
+    <span class="hero__counter"><b id="heroCur">01</b> / <span id="heroTotal">06</span></span>
+  </div>
+
+  <button class="hero__play" id="heroPlay" aria-label="播放当前展台视频">
+    <svg class="i-play" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+    <svg class="i-pause" viewBox="0 0 24 24" fill="currentColor"><rect x="7" y="5" width="3.6" height="14" rx="1"/><rect x="13.4" y="5" width="3.6" height="14" rx="1"/></svg>
+    <span id="heroPlayText">播放展台视频</span>
+  </button>
+
+  <div class="hero__hint" id="heroHint">
+    这一段还没有视频。把 mp4 放进 <code>assets/</code>，
+    在 <code>HERO_VIDEOS</code> 里给对应那条加上 <code>video:</code> 就能播。
+  </div>
+</header>
+
+<!-- ============ 照片墙 + 右侧故事窗口 ============ -->
+
+<!-- ============ 序言 ============ -->
+<section class="intro">
+  <div class="intro__inner">
+    <span class="intro__kicker">关于这本相册</span>
+    <p class="intro__text">
+      2026 年 11 月 15 号，去看他。从第一首到最后一首，举着手机的手一直没放下。<br>
+      这里挑出 101 张，按拍的顺序排。有些糊了，有些抖了，
+      但那天我确实在场。
+    </p>
+    <span class="intro__sign">— 2026.11.16，整理</span>
+  </div>
+</section>
+
+<div class="layout">
+  <main class="mosaic" id="mosaic"></main>
+  <aside class="stories" id="stories" aria-label="故事时间线"></aside>
+</div>
+
+<footer class="foot">
+  <span>101 张 · 1 段现场视频 · 按拍摄顺序</span>
+  <span>点开看大图 · ← → 翻页 · ESC 关闭</span>
+</footer>
+
+<!-- ============ 背景音乐 ============ -->
+<div class="bgm" id="bgm">
+  <div class="bgm__panel" id="bgmPanel">
+    <div class="bgm__head">歌单 <span id="bgmCount"></span></div>
+    <ul class="bgm__list" id="bgmList"></ul>
+  </div>
+  <span class="bgm__bars"><i></i><i></i><i></i><i></i></span>
+  <button class="bgm__btn" id="bgmBtn" aria-label="背景音乐">
+    <svg class="i-note" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M9 18V5l10-2v13"/><circle cx="6.5" cy="18" r="2.6"/><circle cx="16.5" cy="16" r="2.6"/>
+    </svg>
+    <svg class="i-stop" viewBox="0 0 24 24" fill="currentColor"><rect x="7" y="7" width="10" height="10" rx="1.5"/></svg>
+  </button>
+  <span class="bgm__label" id="bgmLabel">歌单</span>
+</div>
+
+<!-- ============ 灯箱 ============ -->
+<div class="lb" id="lb" role="dialog" aria-modal="true" aria-label="大图">
+  <div class="lb__bar">
+    <span><span id="lbIdx">01</span> / <span id="lbTotal">43</span></span>
+    <span id="lbKind">PHOTO</span>
+    <button class="lb__close" id="lbClose" aria-label="关闭">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M5 5l14 14M19 5L5 19"/></svg>
+    </button>
+  </div>
+  <div class="lb__stage">
+    <img class="lb__img" id="lbImg" alt="" />
+    <div class="lb__video" id="lbVideo">
+      <img id="lbCover" alt="" />
+      <div class="lb__video-inner">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2"><circle cx="12" cy="12" r="10"/><path d="M10 8.5v7l6-3.5z" fill="currentColor" stroke="none"/></svg>
+        <p>视频位 · 把 <code>&lt;video src&gt;</code> 换成你的 mp4</p>
+      </div>
+    </div>
+    <button class="lb__nav lb__prev" id="lbPrev" aria-label="上一张">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M15 4l-8 8 8 8"/></svg>
+    </button>
+    <button class="lb__nav lb__next" id="lbNext" aria-label="下一张">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4l8 8-8 8"/></svg>
+    </button>
+  </div>
+  <div class="lb__foot">
+    <div class="lb__info">
+      <span class="lb__title" id="lbTitle"></span>
+      <p class="lb__story" id="lbStory"></p>
+    </div>
+    <span class="lb__meta"><span id="lbPlace"></span><br><span id="lbDate"></span></span>
+  </div>
+</div>
+
+<script>
+/* ============================================================
+   数据：按日期从新到旧排好，页面按 group 字段分组
+   ============================================================ */
+const PHOTOS = [
+  { src:'assets/1.jpg', title:'汪苏泷 · 001', place:'演唱会', date:'2026.11.15', group:'2026', range:'11' },
+  { src:'assets/2.jpg', title:'汪苏泷 · 002', place:'演唱会', date:'2026.11.15', group:'2026', range:'11' },
+  { src:'assets/3.jpg', title:'汪苏泷 · 003', place:'演唱会', date:'2026.11.15', group:'2026', range:'11' },
+  { src:'assets/4.jpg', title:'汪苏泷 · 004', place:'演唱会', date:'2026.11.15', group:'2026', range:'11' },
+  { src:'assets/5.jpg', title:'汪苏泷 · 005', place:'演唱会', date:'2026.11.15', group:'2026', range:'11' },
+  { src:'assets/6.jpg', title:'汪苏泷 · 006', place:'演唱会', date:'2026.11.15', group:'2026', range:'11' },
+  { src:'assets/7.jpg', title:'汪苏泷 · 007', place:'演唱会', date:'2026.11.15', group:'2026', range:'11' },
+  { src:'assets/8.jpg', title:'汪苏泷 · 008', place:'演唱会', date:'2026.11.15', group:'2026', range:'11' },
+  { src:'assets/9.jpg', title:'汪苏泷 · 009', place:'演唱会', date:'2026.11.15', group:'2026', range:'11' },
+  { src:'assets/10.jpg', title:'汪苏泷 · 010', place:'演唱会', date:'2026.11.15', group:'2026', range:'11' },
+  { src:'assets/11.jpg', title:'汪苏泷 · 011', place:'演唱会', date:'2026.11.15', group:'2026', range:'11' },
+  { src:'assets/12.jpg', title:'汪苏泷 · 012', place:'演唱会', date:'2026.11.15', group:'2026', range:'11' },
+  { src:'assets/13.jpg', title:'汪苏泷 · 013', place:'演唱会', date:'2026.11.15', group:'2026', range:'11' },
+  { src:'assets/14.jpg', title:'汪苏泷 · 014', place:'演唱会', date:'2026.11.15', group:'2026', range:'11' },
+  { src:'assets/15.jpg', title:'汪苏泷 · 015', place:'演唱会', date:'2026.11.15', group:'2026', range:'11' },
+  { src:'assets/16.jpg', title:'汪苏泷 · 016', place:'演唱会', date:'2026.11.15', group:'2026', range:'11' },
+  { src:'assets/17.jpg', title:'汪苏泷 · 017', place:'演唱会', date:'2026.11.15', group:'2026', range:'11' },
+  { src:'assets/18.jpg', title:'汪苏泷 · 018', place:'演唱会', date:'2026.11.15', group:'2026', range:'11' },
+  { src:'assets/19.jpg', title:'汪苏泷 · 019', place:'演唱会', date:'2026.11.15', group:'2026', range:'11' },
+  { src:'assets/20.jpg', title:'汪苏泷 · 020', place:'演唱会', date:'2026.11.15', group:'2026', range:'11' },
+  { src:'assets/21.jpg', title:'汪苏泷 · 021', place:'演唱会', date:'2026.11.15', group:'2026', range:'11' },
+  { src:'assets/22.jpg', title:'汪苏泷 · 022', place:'演唱会', date:'2026.11.15', group:'2026', range:'11' },
+  { src:'assets/23.jpg', title:'汪苏泷 · 023', place:'演唱会', date:'2026.11.15', group:'2026', range:'11' },
+  { src:'assets/24.jpg', title:'汪苏泷 · 024', place:'演唱会', date:'2026.11.15', group:'2026', range:'11' },
+  { src:'assets/25.jpg', title:'汪苏泷 · 025', place:'演唱会', date:'2026.11.15', group:'2026', range:'11' },
+  { src:'assets/26.jpg', title:'汪苏泷 · 026', place:'演唱会', date:'2026.11.15', group:'2026', range:'11' },
+  { src:'assets/27.jpg', title:'汪苏泷 · 027', place:'演唱会', date:'2026.11.15', group:'2026', range:'11' },
+  { src:'assets/28.jpg', title:'汪苏泷 · 028', place:'演唱会', date:'2026.11.15', group:'2026', range:'11' },
+  { src:'assets/29.jpg', title:'汪苏泷 · 029', place:'演唱会', date:'2026.11.15', group:'2026', range:'11' },
+  { src:'assets/30.jpg', title:'汪苏泷 · 030', place:'演唱会', date:'2026.11.15', group:'2026', range:'11' },
+  { src:'assets/31.jpg', title:'汪苏泷 · 031', place:'演唱会', date:'2026.11.15', group:'2026', range:'11' },
+  { src:'assets/32.jpg', title:'汪苏泷 · 032', place:'演唱会', date:'2026.11.15', group:'2026', range:'11' },
+  { src:'assets/33.jpg', title:'汪苏泷 · 033', place:'演唱会', date:'2026.11.15', group:'2026', range:'11' },
+  { src:'assets/34.jpg', title:'汪苏泷 · 034', place:'演唱会', date:'2026.11.15', group:'2026', range:'11' },
+  { src:'assets/35.jpg', title:'汪苏泷 · 035', place:'演唱会', date:'2026.11.15', group:'2026', range:'11' },
+  { src:'assets/36.jpg', title:'汪苏泷 · 036', place:'演唱会', date:'2026.11.15', group:'2026', range:'11' },
+  { src:'assets/37.jpg', title:'汪苏泷 · 037', place:'演唱会', date:'2026.11.15', group:'2026', range:'11' },
+  { src:'assets/38.jpg', title:'汪苏泷 · 038', place:'演唱会', date:'2026.11.15', group:'2026', range:'11' },
+  { src:'assets/39.jpg', title:'汪苏泷 · 039', place:'演唱会', date:'2026.11.15', group:'2026', range:'11' },
+  { src:'assets/40.jpg', title:'汪苏泷 · 040', place:'演唱会', date:'2026.11.15', group:'2026', range:'11' },
+  { src:'assets/41.jpg', title:'汪苏泷 · 041', place:'演唱会', date:'2026.11.15', group:'2026', range:'11' },
+  { src:'assets/42.jpg', title:'汪苏泷 · 042', place:'演唱会', date:'2026.11.15', group:'2026', range:'11' },
+  { src:'assets/43.jpg', title:'汪苏泷 · 043', place:'演唱会', date:'2026.11.15', group:'2026', range:'11' },
+  { src:'assets/44.jpg', title:'汪苏泷 · 044', place:'演唱会', date:'2026.11.15', group:'2026', range:'11' },
+  { src:'assets/45.jpg', title:'汪苏泷 · 045', place:'演唱会', date:'2026.11.15', group:'2026', range:'11' },
+  { src:'assets/46.jpg', title:'汪苏泷 · 046', place:'演唱会', date:'2026.11.15', group:'2026', range:'11' },
+  { src:'assets/47.jpg', title:'汪苏泷 · 047', place:'演唱会', date:'2026.11.15', group:'2026', range:'11' },
+  { src:'assets/48.jpg', title:'汪苏泷 · 048', place:'演唱会', date:'2026.11.15', group:'2026', range:'11' },
+  { src:'assets/49.jpg', title:'汪苏泷 · 049', place:'演唱会', date:'2026.11.15', group:'2026', range:'11' },
+  { src:'assets/50.jpg', title:'汪苏泷 · 050', place:'演唱会', date:'2026.11.15', group:'2026', range:'11' },
+  { src:'assets/51.jpg', title:'汪苏泷 · 051', place:'演唱会', date:'2026.11.15', group:'2026', range:'11' },
+  { src:'assets/52.jpg', title:'汪苏泷 · 052', place:'演唱会', date:'2026.11.15', group:'2026', range:'11' },
+  { src:'assets/53.jpg', title:'汪苏泷 · 053', place:'演唱会', date:'2026.11.15', group:'2026', range:'11' },
+  { src:'assets/54.jpg', title:'汪苏泷 · 054', place:'演唱会', date:'2026.11.15', group:'2026', range:'11' },
+  { src:'assets/55.jpg', title:'汪苏泷 · 055', place:'演唱会', date:'2026.11.15', group:'2026', range:'11' },
+  { src:'assets/56.jpg', title:'汪苏泷 · 056', place:'演唱会', date:'2026.11.15', group:'2026', range:'11' },
+  { src:'assets/57.jpg', title:'汪苏泷 · 057', place:'演唱会', date:'2026.11.15', group:'2026', range:'11' },
+  { src:'assets/58.jpg', title:'汪苏泷 · 058', place:'演唱会', date:'2026.11.15', group:'2026', range:'11' },
+  { src:'assets/59.jpg', title:'汪苏泷 · 059', place:'演唱会', date:'2026.11.15', group:'2026', range:'11' },
+  { src:'assets/60.jpg', title:'汪苏泷 · 060', place:'演唱会', date:'2026.11.15', group:'2026', range:'11' },
+  { src:'assets/61.jpg', title:'汪苏泷 · 061', place:'演唱会', date:'2026.11.15', group:'2026', range:'11' },
+  { src:'assets/62.jpg', title:'汪苏泷 · 062', place:'演唱会', date:'2026.11.15', group:'2026', range:'11' },
+  { src:'assets/63.jpg', title:'汪苏泷 · 063', place:'演唱会', date:'2026.11.15', group:'2026', range:'11' },
+  { src:'assets/64.jpg', title:'汪苏泷 · 064', place:'演唱会', date:'2026.11.15', group:'2026', range:'11' },
+  { src:'assets/65.jpg', title:'汪苏泷 · 065', place:'演唱会', date:'2026.11.15', group:'2026', range:'11' },
+  { src:'assets/66.jpg', title:'汪苏泷 · 066', place:'演唱会', date:'2026.11.15', group:'2026', range:'11' },
+  { src:'assets/67.jpg', title:'汪苏泷 · 067', place:'演唱会', date:'2026.11.15', group:'2026', range:'11' },
+  { src:'assets/68.jpg', title:'汪苏泷 · 068', place:'演唱会', date:'2026.11.15', group:'2026', range:'11' },
+  { src:'assets/69.jpg', title:'汪苏泷 · 069', place:'演唱会', date:'2026.11.15', group:'2026', range:'11' },
+  { src:'assets/70.jpg', title:'汪苏泷 · 070', place:'演唱会', date:'2026.11.15', group:'2026', range:'11' },
+  { src:'assets/71.jpg', title:'汪苏泷 · 071', place:'演唱会', date:'2026.11.15', group:'2026', range:'11' },
+  { src:'assets/72.jpg', title:'汪苏泷 · 072', place:'演唱会', date:'2026.11.15', group:'2026', range:'11' },
+  { src:'assets/73.jpg', title:'汪苏泷 · 073', place:'演唱会', date:'2026.11.15', group:'2026', range:'11' },
+  { src:'assets/74.jpg', title:'汪苏泷 · 074', place:'演唱会', date:'2026.11.15', group:'2026', range:'11' },
+  { src:'assets/75.jpg', title:'汪苏泷 · 075', place:'演唱会', date:'2026.11.15', group:'2026', range:'11' },
+  { src:'assets/76.jpg', title:'汪苏泷 · 076', place:'演唱会', date:'2026.11.15', group:'2026', range:'11' },
+  { src:'assets/77.jpg', title:'汪苏泷 · 077', place:'演唱会', date:'2026.11.15', group:'2026', range:'11' },
+  { src:'assets/78.jpg', title:'汪苏泷 · 078', place:'演唱会', date:'2026.11.15', group:'2026', range:'11' },
+  { src:'assets/79.jpg', title:'汪苏泷 · 079', place:'演唱会', date:'2026.11.15', group:'2026', range:'11' },
+  { src:'assets/80.jpg', title:'汪苏泷 · 080', place:'演唱会', date:'2026.11.15', group:'2026', range:'11' },
+  { src:'assets/81.jpg', title:'汪苏泷 · 081', place:'演唱会', date:'2026.11.15', group:'2026', range:'11' },
+  { src:'assets/82.jpg', title:'汪苏泷 · 082', place:'演唱会', date:'2026.11.15', group:'2026', range:'11' },
+  { src:'assets/83.jpg', title:'汪苏泷 · 083', place:'演唱会', date:'2026.11.15', group:'2026', range:'11' },
+  { src:'assets/84.jpg', title:'汪苏泷 · 084', place:'演唱会', date:'2026.11.15', group:'2026', range:'11' },
+  { src:'assets/85.jpg', title:'汪苏泷 · 085', place:'演唱会', date:'2026.11.15', group:'2026', range:'11' },
+  { src:'assets/86.jpg', title:'汪苏泷 · 086', place:'演唱会', date:'2026.11.15', group:'2026', range:'11' },
+  { src:'assets/87.jpg', title:'汪苏泷 · 087', place:'演唱会', date:'2026.11.15', group:'2026', range:'11' },
+  { src:'assets/88.jpg', title:'汪苏泷 · 088', place:'演唱会', date:'2026.11.15', group:'2026', range:'11' },
+  { src:'assets/89.jpg', title:'汪苏泷 · 089', place:'演唱会', date:'2026.11.15', group:'2026', range:'11' },
+  { src:'assets/90.jpg', title:'汪苏泷 · 090', place:'演唱会', date:'2026.11.15', group:'2026', range:'11' },
+  { src:'assets/91.jpg', title:'汪苏泷 · 091', place:'演唱会', date:'2026.11.16', group:'2026', range:'11' },
+  { src:'assets/92.jpg', title:'汪苏泷 · 092', place:'演唱会', date:'2026.11.16', group:'2026', range:'11' },
+  { src:'assets/93.jpg', title:'汪苏泷 · 093', place:'演唱会', date:'2026.11.16', group:'2026', range:'11' },
+  { src:'assets/94.jpg', title:'汪苏泷 · 094', place:'演唱会', date:'2026.11.16', group:'2026', range:'11' },
+  { src:'assets/95.jpg', title:'汪苏泷 · 095', place:'演唱会', date:'2026.11.16', group:'2026', range:'11' },
+  { src:'assets/96.jpg', title:'汪苏泷 · 096', place:'演唱会', date:'2026.11.16', group:'2026', range:'11' },
+  { src:'assets/97.jpg', title:'汪苏泷 · 097', place:'演唱会', date:'2026.11.16', group:'2026', range:'11' },
+  { src:'assets/98.jpg', title:'汪苏泷 · 098', place:'演唱会', date:'2026.11.16', group:'2026', range:'11' },
+  { src:'assets/99.jpg', title:'汪苏泷 · 099', place:'演唱会', date:'2026.11.16', group:'2026', range:'11' },
+  { src:'assets/100.jpg', title:'汪苏泷 · 100', place:'演唱会', date:'2026.11.16', group:'2026', range:'11' },
+  { src:'assets/101.jpg', title:'汪苏泷 · 101', place:'演唱会', date:'2026.11.16', group:'2026', range:'11' },
+];
+
+
+const isShot = /[?&]shot=1/.test(location.search);
+if (isShot) document.documentElement.classList.add('shot');
+
+/* ---------------- 渲染：按 group 分段 ---------------- */
+const mosaic = document.getElementById('mosaic');
+
+function tileHTML(p, i, isEnd) {
+  const isVideo = p.type === 'video';
+  return `<figure class="tile${isEnd ? ' tile--end' : ''}" data-i="${i}" tabindex="0" role="button" aria-label="${p.title}">
+    <img src="${p.src}" alt="${p.title}" ${isShot ? '' : 'loading="lazy"'} decoding="async" />
+    ${isVideo ? `<span class="tile__tag"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>${p.dur || '0:00'}</span>` : ''}
+    ${p.story ? '<span class="tile__dot" aria-hidden="true"></span>' : ''}
+    <span class="tile__cap"><b>${p.title}</b><span>${p.place} · ${p.date}</span></span>
+  </figure>`;
+}
+
+/* 故事卡：整行，左图右文 */
+function storyCardHTML(p, i) {
+  return `<article class="story-card" data-i="${i}" tabindex="0" role="button" aria-label="${p.title}">
+    <div class="story-card__img">
+      <img src="${p.src}" alt="${p.title}" ${isShot ? '' : 'loading="lazy"'} decoding="async" />
+    </div>
+    <div class="story-card__text">
+      <span class="story-card__kicker">有一件事</span>
+      <h3>${p.title}</h3>
+      <p>${p.story}</p>
+      <span class="story-card__meta">${p.place} · ${p.date}</span>
+    </div>
+  </article>`;
+}
+
+/* 桌面固定 4 列：16 张、24 张都能整除，两组一样整齐 */
+function pickCols() {
+  return 4;
+}
+
+function render() {
+  let html = '';
+  let lastGroup = null;
+  let buf = [];
+  const narrow = window.innerWidth <= 640;
+
+  const flush = () => {
+    if (!buf.length) return;
+    const head = buf[0];
+    const total = buf.length;
+    const cols = narrow ? 2 : pickCols(buf.length);
+
+    html += `<section class="group">
+      <div class="group__head">
+        <h2 class="group__title">${head.group}</h2>
+        <span class="group__range">${head.range}</span>
+        <span class="group__count">${total} 张</span>
+      </div>
+      <div class="group__grid" style="--cols:${cols}">`;
+
+    const rem = total % Math.max(1, cols);
+    buf.forEach((it, idx) => {
+      html += tileHTML(it.p, it.i, rem === 1 && idx === total - 1);
+    });
+
+    html += `</div></section>`;
+    buf = [];
+  };
+
+  PHOTOS.forEach((p, i) => {
+    if (p.group !== lastGroup) { flush(); lastGroup = p.group; }
+    buf.push({ p, i, group: p.group, range: p.range });
+  });
+  flush();
+
+  mosaic.innerHTML = html;
+}
+render();
+
+/* ============================================================
+   右侧故事窗口：按日期从早到晚排
+   ============================================================ */
+const storiesEl = document.getElementById('stories');
+
+function renderStories() {
+  const list = PHOTOS
+    .map((p, i) => ({ p, i }))
+    .filter(x => x.p.story)
+    .sort((a, b) => a.p.date.localeCompare(b.p.date));   // 早 → 晚
+
+  storiesEl.innerHTML =
+    `<div class="stories__head">
+       <span class="stories__title"><i></i>故事</span>
+       <span class="stories__count">${list.length} 则 · 由早到晚</span>
+     </div>` +
+    list.map(x => `
+      <article class="story" data-i="${x.i}" tabindex="0" role="button" aria-label="${x.p.title}">
+        <div class="story__date">${x.p.date}</div>
+        <h3 class="story__title">${x.p.title}</h3>
+        <p class="story__text">${x.p.story}</p>
+      </article>`).join('');
+}
+if (!PHOTOS.some(p => p.story)) {
+  storiesEl.style.display = 'none';
+  document.querySelector('.layout').classList.add('no-rail');
+}
+renderStories();
+
+// 点故事 → 打开那张图的大图
+storiesEl.addEventListener('click', e => {
+  const st = e.target.closest('.story');
+  if (st) open(Number(st.dataset.i));
+});
+storiesEl.addEventListener('keydown', e => {
+  if (e.key === 'Enter' || e.key === ' ') {
+    const st = e.target.closest('.story');
+    if (st) { e.preventDefault(); open(Number(st.dataset.i)); }
+  }
+});
+
+
+let _rz;
+window.addEventListener('resize', () => {
+  clearTimeout(_rz);
+  _rz = setTimeout(render, 200);
+});
+
+/* ============================================================
+   顶部展台轮播
+   想加视频：给 HERO_VIDEOS 里任意一条加 video:'assets/xxx.mp4'
+   ============================================================ */
+const HERO_VIDEOS = [
+  { poster:'assets/poster.jpg', video:'assets/hero.mp4', kicker:'展台 01',
+    title:'第一次现场', sub:'2026.11.15 · 演唱会',
+    story:'灯一暗全场就喊起来了，我旁边那个女生哭得比我还早。' }
+];
+
+const track = document.getElementById('heroTrack');
+const heroBars = document.getElementById('heroBars');
+const heroPrev = document.getElementById('heroPrev');
+const heroNext = document.getElementById('heroNext');
+const heroPlay = document.getElementById('heroPlay');
+const heroHint = document.getElementById('heroHint');
+const heroPlayText = document.getElementById('heroPlayText');
+const heroCurEl = document.getElementById('heroCur');
+
+track.innerHTML = HERO_VIDEOS.map((v, i) => {
+  const tag = i === 0 ? 'h1' : 'h2';
+  return `<div class="hero__slide" data-i="${i}">
+    <img class="poster" src="${v.poster}" alt="">
+    ${v.video ? `<video muted loop playsinline preload="none" src="${v.video}"></video>` : ''}
+    <div class="hero__cap">
+      <div class="hero__kicker"><i></i>${v.kicker}</div>
+      <${tag}>${v.title}</${tag}>
+      <p class="hero__sub">${v.sub}</p>
+      ${v.story ? `<p class="hero__story">${v.story}</p>` : ''}
+    </div>
+  </div>`;
+}).join('');
+
+document.getElementById('heroTotal').textContent = String(HERO_VIDEOS.length).padStart(2, '0');
+heroBars.innerHTML = HERO_VIDEOS.map((_, i) =>
+  `<button class="hero__bar${i === 0 ? ' on' : ''}" data-i="${i}" aria-label="第 ${i + 1} 个展台"></button>`
+).join('');
+
+let heroIdx = 0;
+
+function setHeroIdx(i) {
+  heroIdx = i;
+  heroBars.querySelectorAll('.hero__bar').forEach((b, k) => b.classList.toggle('on', k === i));
+  heroCurEl.textContent = String(i + 1).padStart(2, '0');
+  heroPrev.disabled = i === 0;
+  heroNext.disabled = i === HERO_VIDEOS.length - 1;
+
+  // 切走的视频一律暂停
+  track.querySelectorAll('video').forEach((v, k) => {
+    if (k !== i) { v.pause(); v.classList.remove('on'); }
+  });
+
+  const cur = track.querySelectorAll('.hero__slide')[i];
+  const v = cur ? cur.querySelector('video') : null;
+  const playing = !!(v && !v.paused);
+  heroPlay.classList.toggle('playing', playing);
+  heroPlayText.textContent = playing ? '暂停' : '播放展台视频';
+}
+
+function goHero(i) {
+  const n = HERO_VIDEOS.length;
+  i = Math.max(0, Math.min(n - 1, i));
+  track.scrollTo({ left: i * track.clientWidth, behavior: 'smooth' });
+  setHeroIdx(i);
+}
+
+heroPrev.addEventListener('click', () => goHero(heroIdx - 1));
+heroNext.addEventListener('click', () => goHero(heroIdx + 1));
+heroBars.addEventListener('click', e => {
+  const b = e.target.closest('.hero__bar');
+  if (b) goHero(Number(b.dataset.i));
+});
+
+// 横向滚动（触摸 / 触控板）时同步状态
+let heroTicking = false;
+track.addEventListener('scroll', () => {
+  if (heroTicking) return;
+  heroTicking = true;
+  requestAnimationFrame(() => {
+    const i = Math.round(track.scrollLeft / Math.max(1, track.clientWidth));
+    if (i !== heroIdx) setHeroIdx(i);
+    heroTicking = false;
+  });
+}, { passive: true });
+
+// 窗口尺寸变化后，重新对准当前 slide
+let heroRz;
+window.addEventListener('resize', () => {
+  clearTimeout(heroRz);
+  heroRz = setTimeout(() => {
+    track.scrollTo({ left: heroIdx * track.clientWidth, behavior: 'auto' });
+  }, 150);
+});
+
+// 播放 / 暂停当前展台视频
+function flashHeroHint() {
+  heroHint.classList.add('show');
+  clearTimeout(heroHint._t);
+  heroHint._t = setTimeout(() => heroHint.classList.remove('show'), 4200);
+}
+heroPlay.addEventListener('click', () => {
+  const slide = track.querySelectorAll('.hero__slide')[heroIdx];
+  const v = slide ? slide.querySelector('video') : null;
+  if (!v) { flashHeroHint(); return; }
+  if (v.paused) {
+    v.classList.add('on');
+    v.play().catch(() => {});
+  } else {
+    v.pause();
+    v.classList.remove('on');
+  }
+  setHeroIdx(heroIdx);
+});
+
+// 键盘左右切换（灯箱打开时让给灯箱）
+document.addEventListener('keydown', e => {
+  const lbEl = document.getElementById('lb');
+  if (lbEl && lbEl.classList.contains('open')) return;
+  if (e.target && /INPUT|TEXTAREA/.test(e.target.tagName)) return;
+  if (e.key === 'ArrowLeft') { e.preventDefault(); goHero(heroIdx - 1); }
+  if (e.key === 'ArrowRight') { e.preventDefault(); goHero(heroIdx + 1); }
+});
+
+setHeroIdx(0);
+
+/* ---------------- 背景音乐 ---------------- */
+const PLAYLIST = [
+  { file:'assets/s1.mp3', title:'唯你懂我心', artist:'汪苏泷' },
+  { file:'assets/s2.mp3', title:'闪耀', artist:'Cover' },
+  { file:'assets/s3.mp3', title:'银河', artist:'汪苏泷' },
+  { file:'assets/s4.mp3', title:'随便', artist:'汪苏泷' },
+  { file:'assets/s5.mp3', title:'小段', artist:'汪苏泷' },
+  { file:'assets/s6.mp3', title:'黑眼圈', artist:'汪苏泷' },
+  { file:'assets/s7.mp3', title:'演唱会现场', artist:'2026.11.15' }
+];
+
+const bgm = document.getElementById('bgm');
+const bgmBtn = document.getElementById('bgmBtn');
+const bgmLabel = document.getElementById('bgmLabel');
+const bgmList = document.getElementById('bgmList');
+const bgmCount = document.getElementById('bgmCount');
+const bgmAudio = new Audio();
+bgmAudio.preload = 'none';
+bgmAudio.volume = 0.55;
+
+let curTrack = -1;
+
+bgmCount.textContent = PLAYLIST.length + ' 首';
+bgmList.innerHTML = PLAYLIST.map((t, i) =>
+  `<li class="bgm__item" data-i="${i}"><span class="num">${String(i + 1).padStart(2, '0')}</span><span class="t">${t.title}</span><span class="a">${t.artist}</span></li>`
+).join('');
+
+function syncBgmUI() {
+  const playing = !bgmAudio.paused;
+  bgm.classList.toggle('playing', playing);
+  bgmLabel.textContent = playing && curTrack >= 0 ? PLAYLIST[curTrack].title : '歌单';
+  bgmList.querySelectorAll('.bgm__item').forEach((el, i) => {
+    el.classList.toggle('on', i === curTrack && playing);
+  });
+}
+
+function playTrack(i) {
+  if (i < 0 || i >= PLAYLIST.length) return;
+  if (i === curTrack && !bgmAudio.paused) { bgmAudio.pause(); syncBgmUI(); return; }
+  curTrack = i;
+  bgmAudio.src = PLAYLIST[i].file;
+  bgmAudio.play().then(syncBgmUI).catch(syncBgmUI);
+}
+
+bgmBtn.addEventListener('click', e => {
+  e.stopPropagation();
+  if (!bgm.classList.contains('open')) { bgm.classList.add('open'); return; }
+  if (curTrack < 0) { playTrack(0); return; }
+  if (bgmAudio.paused) bgmAudio.play().then(syncBgmUI);
+  else { bgmAudio.pause(); syncBgmUI(); }
+});
+
+bgmList.addEventListener('click', e => {
+  const it = e.target.closest('.bgm__item');
+  if (it) playTrack(Number(it.dataset.i));
+});
+
+let bgmHideTimer = 0;
+bgm.addEventListener('mouseenter', () => {
+  clearTimeout(bgmHideTimer);
+  bgm.classList.add('open');
+});
+bgm.addEventListener('mouseleave', () => {
+  // 延迟关闭：给鼠标穿过按钮和面板之间 12px 间隙的时间
+  clearTimeout(bgmHideTimer);
+  bgmHideTimer = setTimeout(() => bgm.classList.remove('open'), 400);
+});
+document.addEventListener('click', e => {
+  if (!bgm.contains(e.target)) bgm.classList.remove('open');
+});
+
+bgmAudio.addEventListener('play', syncBgmUI);
+bgmAudio.addEventListener('pause', syncBgmUI);
+bgmAudio.addEventListener('ended', () => {
+  if (curTrack >= 0) playTrack((curTrack + 1) % PLAYLIST.length);
+});
+
+/* ---------------- 灯箱 ---------------- */
+const lb = document.getElementById('lb');
+const lbImg = document.getElementById('lbImg');
+const lbVideo = document.getElementById('lbVideo');
+const lbCover = document.getElementById('lbCover');
+const lbTitle = document.getElementById('lbTitle');
+const lbStory = document.getElementById('lbStory');
+const lbPlace = document.getElementById('lbPlace');
+const lbDate = document.getElementById('lbDate');
+const lbIdx = document.getElementById('lbIdx');
+const lbTotal = document.getElementById('lbTotal');
+const lbKind = document.getElementById('lbKind');
+
+let order = [], cur = 0;
+
+function open(i) {
+  order = Array.from(mosaic.querySelectorAll('.tile, .story-card')).map(t => Number(t.dataset.i));
+  cur = order.indexOf(i);
+  if (cur < 0) return;
+  lbTotal.textContent = order.length;
+  show();
+  lb.classList.add('open');
+  document.body.style.overflow = 'hidden';
+}
+function show() {
+  const p = PHOTOS[order[cur]];
+  lbIdx.textContent = cur + 1;
+  lbTitle.textContent = p.title;
+  lbStory.textContent = p.story || '';
+  lbStory.classList.toggle('on', !!p.story);
+  lbPlace.textContent = p.place || '';
+  lbDate.textContent = p.date || '';
+  lbKind.textContent = p.type === 'video' ? 'VIDEO' : 'PHOTO';
+  if (p.type === 'video') {
+    lbImg.style.display = 'none';
+    lbVideo.classList.add('on');
+    lbCover.src = p.src;
+  } else {
+    lbVideo.classList.remove('on');
+    lbImg.style.display = 'block';
+    lbImg.classList.remove('shown');
+    lbImg.src = p.src;
+    lbImg.onload = () => lbImg.classList.add('shown');
+    if (lbImg.complete) lbImg.classList.add('shown');
+  }
+}
+function step(d) { cur = (cur + d + order.length) % order.length; show(); }
+function close() { lb.classList.remove('open'); document.body.style.overflow = ''; }
+
+mosaic.addEventListener('click', e => {
+  const t = e.target.closest('.tile, .story-card');
+  if (t) open(Number(t.dataset.i));
+});
+mosaic.addEventListener('keydown', e => {
+  if (e.key === 'Enter' || e.key === ' ') {
+    const t = e.target.closest('.tile, .story-card');
+    if (t) { e.preventDefault(); open(Number(t.dataset.i)); }
+  }
+});
+document.getElementById('lbClose').onclick = close;
+document.getElementById('lbPrev').onclick = () => step(-1);
+document.getElementById('lbNext').onclick = () => step(1);
+lb.addEventListener('click', e => { if (e.target === lb || e.target.classList.contains('lb__stage')) close(); });
+document.addEventListener('keydown', e => {
+  if (!lb.classList.contains('open')) return;
+  if (e.key === 'Escape') close();
+  if (e.key === 'ArrowLeft') step(-1);
+  if (e.key === 'ArrowRight') step(1);
+});
+const op = location.search.match(/[?&]open=(\d+)/);
+if (op) setTimeout(() => open(Number(op[0 + 1])), 300);
+</script>
+</body>
+</html>
